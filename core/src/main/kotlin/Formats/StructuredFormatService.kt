@@ -288,25 +288,25 @@ abstract class StructuredOutputBuilder(val to: StringBuilder,
             } else {
                 val breakdownByName = nodes.groupBy { node -> node.name }
                 for ((name, items) in breakdownByName) {
-                    if (!noHeader)
-                        appendHeader { appendText(name) }
-                    appendDocumentation(items, singleNode != null)
+                    appendDocumentation(name, items, singleNode != null)
                 }
             }
         }
 
-        private fun appendDocumentation(overloads: Iterable<DocumentationNode>, isSingleNode: Boolean) {
+        private fun appendDocumentation(name: String, overloads: Iterable<DocumentationNode>, isSingleNode: Boolean) {
             val breakdownBySummary = overloads.groupByTo(LinkedHashMap()) { node -> node.content }
 
             if (breakdownBySummary.size == 1) {
+                if (!noHeader)
+                    appendHeader { appendText(name) }
                 formatOverloadGroup(breakdownBySummary.values.single(), isSingleNode)
             } else {
                 for ((_, items) in breakdownBySummary) {
-
+                    if (!noHeader)
+                        appendHeader { appendText(name) }
                     appendAsOverloadGroup(to, platformsOfItems(items)) {
                         formatOverloadGroup(items)
                     }
-
                 }
             }
         }
@@ -594,6 +594,7 @@ abstract class StructuredOutputBuilder(val to: StringBuilder,
                                 for ((summary, items) in breakdownBySummary) {
                                     appendSummarySignatures(items)
                                     appendContent(summary)
+                                    appendLine()
                                 }
                             }
                         }

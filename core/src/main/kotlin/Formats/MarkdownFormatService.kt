@@ -33,10 +33,12 @@ open class MarkdownOutputBuilder(to: StringBuilder,
     private var lastTableCellStart = -1
     private var maxBackticksInCodeBlock = 0
 
-    private fun appendNewline() {
+    private fun appendNewline(forceLineBreak: Boolean = false) {
         while (to.endsWith(' ')) {
             to.setLength(to.length - 1)
         }
+        if (forceLineBreak)
+            to.append("  ")
         to.appendln()
     }
 
@@ -48,7 +50,7 @@ open class MarkdownOutputBuilder(to: StringBuilder,
         }
         else {
             if (!endsWithNewline()) {
-                appendNewline()
+                appendNewline(true)
             }
         }
     }
@@ -150,7 +152,7 @@ open class MarkdownOutputBuilder(to: StringBuilder,
             to.append("<br>")
         }
         else {
-            appendNewline()
+            appendNewline(true)
         }
     }
 
