@@ -72,7 +72,7 @@ dokka {
     skipDeprecated = false 
    
     // Emit warnings about not documented members. Applies globally, also can be overridden by packageOptions
-    reportNotDocumented = true 
+    reportUndocumented = true 
     
     skipEmptyPackages = true // Do not create index pages for empty packages
  
@@ -137,6 +137,11 @@ dokka {
         skipDeprecated = false
         reportUndocumented = true // Emit warnings about not documented members 
         includeNonPublic = false
+    }
+    // Suppress a package
+    packageOptions {
+        prefix = "kotlin.internal" // will match kotlin.internal and all sub-packages of it
+        suppress = true
     }
 }
 ```
@@ -242,7 +247,7 @@ The available configuration options are shown below:
         <!-- Default: ${project.artifactId} -->
         <moduleName>data</moduleName>
         <!-- See list of possible formats below -->
-        <outFormat>html</outFormat>
+        <outputFormat>html</outputFormat>
         <!-- Default: ${project.basedir}/target/dokka -->
         <outputDir>some/out/dir</outputDir>
         
