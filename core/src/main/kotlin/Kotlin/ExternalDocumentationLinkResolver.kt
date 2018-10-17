@@ -5,6 +5,7 @@ import com.google.inject.Singleton
 import com.intellij.psi.PsiMethod
 import com.intellij.util.io.*
 import org.jetbrains.kotlin.descriptors.*
+import org.jetbrains.kotlin.descriptors.impl.EnumEntrySyntheticClassDescriptor
 import org.jetbrains.kotlin.load.java.descriptors.JavaCallableMemberDescriptor
 import org.jetbrains.kotlin.load.java.descriptors.JavaClassDescriptor
 import org.jetbrains.kotlin.load.java.descriptors.JavaMethodDescriptor
@@ -178,7 +179,9 @@ interface InboundExternalLinkResolutionService {
 
     class Javadoc(val useDashAsParameterSeparator: Boolean = false, val useDotAsSubclassSeparator: Boolean = false) : InboundExternalLinkResolutionService {
         override fun getPath(symbol: DeclarationDescriptor): String? {
-            if (symbol is JavaClassDescriptor) {
+            if (symbol is EnumEntrySyntheticClassDescriptor) {
+                return getPath(symbol.containingDeclaration)?.let { it + "#" + symbol.name.asString() }
+            } else if (symbol is JavaClassDescriptor) {
                 if (useDotAsSubclassSeparator && !DescriptorUtils.isTopLevelDeclaration(symbol)) {
                     val fullPath = DescriptorUtils.getFqName(symbol).asString()
                     val topLevel = DescriptorUtils.getFqNameFromTopLevelClass(symbol).asString()
@@ -223,13 +226,11 @@ interface InboundExternalLinkResolutionService {
             else return "$path/index.$extension"
         }
 
-        fun getPathWithoutExtension(symbol: DeclarationDescriptor): String {
-            if (symbol.containingDeclaration == null)
-                return identifierToFilename(symbol.name.asString())
-            else if (symbol is PackageFragmentDescriptor) {
-                return symbol.fqName.asString()
-            } else {
-                return getPathWithoutExtension(symbol.containingDeclaration!!) + '/' + identifierToFilename(symbol.name.asString())
+        private fun getPathWithoutExtension(symbol: DeclarationDescriptor): String {
+            return when {
+                symbol.containingDeclaration == null -> identifierToFilename(symbol.name.asString())
+                symbol is PackageFragmentDescriptor -> identifierToFilename(symbol.fqName.asString())
+                else -> getPathWithoutExtension(symbol.containingDeclaration!!) + '/' + identifierToFilename(symbol.name.asString())
             }
         }
 

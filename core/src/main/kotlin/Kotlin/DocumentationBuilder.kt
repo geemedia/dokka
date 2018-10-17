@@ -53,7 +53,7 @@ class DocumentationOptions(val outputDir: String,
                            val languageVersion: String?,
                            val apiVersion: String?,
                            cacheRoot: String? = null,
-                           val suppressedFiles: List<File> = emptyList()) {
+                           val suppressedFiles: Set<File> = emptySet()) {
     init {
         if (perPackageOptions.any { it.prefix == "" })
             throw IllegalArgumentException("Please do not register packageOptions with all match pattern, use global settings instead")
@@ -887,7 +887,7 @@ fun DeclarationDescriptor.isDocumentationSuppressed(options: DocumentationOption
 }
 
 fun DeclarationDescriptor.sourcePsi() =
-        ((original as DeclarationDescriptorWithSource).source as? PsiSourceElement)?.psi
+        ((original as? DeclarationDescriptorWithSource)?.source as? PsiSourceElement)?.psi
 
 fun DeclarationDescriptor.isDeprecated(): Boolean = annotations.any {
     DescriptorUtils.getFqName(it.type.constructor.declarationDescriptor!!).asString() == "kotlin.Deprecated"
