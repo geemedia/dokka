@@ -1,5 +1,5 @@
-[test](index.md) / [f](./f.md)
+[test](../index.md) / [f](./f.md)
 
 # f
 
-`inline fun <reified T> f(): Unit`
+`inline fun <reified T> f(a: () -> String): Unit`

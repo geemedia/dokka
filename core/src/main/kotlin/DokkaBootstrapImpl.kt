@@ -1,8 +1,8 @@
 package org.jetbrains.dokka
 
+import com.google.gson.Gson
 import org.jetbrains.dokka.DokkaConfiguration.PackageOptions
-import ru.yole.jkid.deserialization.deserialize
-import java.io.File
+
 import java.util.function.BiConsumer
 
 
@@ -39,40 +39,38 @@ class DokkaBootstrapImpl : DokkaBootstrap {
     }
 
     lateinit var generator: DokkaGenerator
+    val gson = Gson()
+
+    fun configure(logger: DokkaLogger, configuration: DokkaConfigurationImpl) = with(configuration) {
+
+        fun defaultLinks(config: PassConfigurationImpl): List<ExternalDocumentationLinkImpl> {
+            val links = mutableListOf<ExternalDocumentationLinkImpl>()
+            if (!config.noJdkLink)
+                links += DokkaConfiguration.ExternalDocumentationLink
+                    .Builder("https://docs.oracle.com/javase/${config.jdkVersion}/docs/api/")
+                    .build() as ExternalDocumentationLinkImpl
+
+            if (!config.noStdlibLink)
+                links += DokkaConfiguration.ExternalDocumentationLink
+                    .Builder("https://kotlinlang.org/api/latest/jvm/stdlib/")
+                    .build() as ExternalDocumentationLinkImpl
+            return links
+        }
+
+        val configurationWithLinks =
+            configuration.copy(passesConfigurations =
+            passesConfigurations
+                .map {
+                    val links: List<ExternalDocumentationLinkImpl> = it.externalDocumentationLinks + defaultLinks(it)
+                    it.copy(externalDocumentationLinks = links)
+                }
+            )
+
+        generator = DokkaGenerator(configurationWithLinks, logger)
+    }
 
     override fun configure(logger: BiConsumer<String, String>, serializedConfigurationJSON: String)
-            = configure(DokkaProxyLogger(logger), deserialize<DokkaConfigurationImpl>(serializedConfigurationJSON))
-
-    fun configure(logger: DokkaLogger, configuration: DokkaConfiguration) = with(configuration) {
-        generator = DokkaGenerator(
-                logger,
-                classpath,
-                sourceRoots,
-                samples,
-                includes,
-                moduleName,
-                DocumentationOptions(
-                        outputDir,
-                        format,
-                        includeNonPublic,
-                        includeRootPackage,
-                        reportUndocumented,
-                        skipEmptyPackages,
-                        skipDeprecated,
-                        jdkVersion,
-                        generateIndexPages,
-                        sourceLinks,
-                        impliedPlatforms,
-                        perPackageOptions,
-                        externalDocumentationLinks,
-                        noStdlibLink,
-                        languageVersion,
-                        apiVersion,
-                        cacheRoot,
-                        suppressedFiles.map { File(it) }.toSet()
-                )
-        )
-    }
+            = configure(DokkaProxyLogger(logger), gson.fromJson(serializedConfigurationJSON, DokkaConfigurationImpl::class.java))
 
     override fun generate() = generator.generate()
 }

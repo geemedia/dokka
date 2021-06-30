@@ -2,9 +2,7 @@
 
 ## Package foo
 
-**Platform and version requirements:** JVM, JS
-
 ### Types
 
-| [Foo](-foo/index.md)<br>(JVM, JS) | `class Foo`<br>This is a foo. |
+| (JVM, JS) [Foo](-foo/index.md) | This is a foo.`class Foo` |
 

@@ -1,4 +1,4 @@
-[test](../index.md) / [Foo](./index.md)
+[test](../../index.md) / [Foo](./index.md)
 
 # Foo
 
@@ -10,11 +10,11 @@ The class Foo.
 
 | Name | Summary |
 |---|---|
-| [&lt;init&gt;](-init-.md) | `Foo()`<br>The class Foo. |
+| [&lt;init&gt;](-init-.md) | The class Foo.`Foo()` |
 
 ### Functions
 
 | Name | Summary |
 |---|---|
-| [bar](bar.md) | `fun bar(): Unit`<br>The method bar. |
-| [baz](baz.md) | `fun baz(): Unit`<br>The method baz. |
+| [bar](bar.md) | The method bar.`fun bar(): Unit` |
+| [baz](baz.md) | The method baz.`fun baz(): Unit` |

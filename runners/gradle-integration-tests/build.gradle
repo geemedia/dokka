@@ -1,5 +1,3 @@
-
-
 apply plugin: 'kotlin'
 
 sourceCompatibility = 1.8
@@ -7,16 +5,16 @@ sourceCompatibility = 1.8
 tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
     kotlinOptions {
         freeCompilerArgs += "-Xjsr305=strict"
-        languageVersion = "1.2"
-        apiVersion = "1.0"
+        languageVersion = language_version
+        apiVersion = language_version
         jvmTarget = "1.8"
     }
 }
 
 configurations {
     dokkaPlugin
-    dokkaAndroidPlugin
     dokkaFatJar
+    kotlinGradle
 }
 
 dependencies {
@@ -26,8 +24,9 @@ dependencies {
     testCompile ideaRT()
 
     dokkaPlugin project(path: ':runners:gradle-plugin', configuration: 'shadow')
-    dokkaAndroidPlugin project(path: ':runners:android-gradle-plugin', configuration: 'shadow')
     dokkaFatJar project(path: ":runners:fatjar", configuration: 'shadow')
+
+    kotlinGradle "org.jetbrains.kotlin:kotlin-gradle-plugin"
 
     testCompile group: 'junit', name: 'junit', version: '4.12'
     testCompile gradleTestKit()
@@ -38,14 +37,14 @@ dependencies {
 task createClasspathManifest {
     def outputDir = file("$buildDir/$name")
 
-    inputs.files(configurations.dokkaPlugin + configurations.dokkaAndroidPlugin + configurations.dokkaFatJar)
+    inputs.files(configurations.dokkaPlugin + configurations.dokkaFatJar)
     outputs.dir outputDir
 
     doLast {
         outputDir.mkdirs()
         file("$outputDir/dokka-plugin-classpath.txt").text = configurations.dokkaPlugin.join("\n")
-        file("$outputDir/android-dokka-plugin-classpath.txt").text = configurations.dokkaAndroidPlugin.join("\n")
         file("$outputDir/fatjar.txt").text = configurations.dokkaFatJar.join("\n")
+        file("$outputDir/kotlin-gradle.txt").text = configurations.kotlinGradle.join("\n")
     }
 }
 
@@ -56,4 +55,5 @@ testClasses.dependsOn createClasspathManifest
 
 test {
     systemProperty "android.licenses.overwrite", project.findProperty("android.licenses.overwrite") ?: ""
+    inputs.dir(file('testData'))
 }

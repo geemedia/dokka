@@ -6,58 +6,72 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.io.FileUtil
 import com.intellij.rt.execution.junit.FileComparisonFailure
 import org.jetbrains.dokka.*
-import org.jetbrains.dokka.DokkaConfiguration.SourceLinkDefinition
 import org.jetbrains.dokka.Utilities.DokkaAnalysisModule
+import org.jetbrains.dokka.Utilities.DokkaRunModule
+import org.jetbrains.kotlin.cli.common.config.ContentRoot
+import org.jetbrains.kotlin.cli.common.config.KotlinSourceRoot
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageLocation
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import org.jetbrains.kotlin.cli.jvm.config.JavaSourceRoot
-import org.jetbrains.kotlin.config.ContentRoot
-import org.jetbrains.kotlin.config.KotlinSourceRoot
 import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
+import org.jetbrains.kotlin.utils.PathUtil
 import org.junit.Assert
 import org.junit.Assert.fail
 import java.io.File
 
-fun verifyModel(vararg roots: ContentRoot,
-                withJdk: Boolean = false,
-                withKotlinRuntime: Boolean = false,
-                format: String = "html",
-                includeNonPublic: Boolean = true,
-                perPackageOptions: List<DokkaConfiguration.PackageOptions> = emptyList(),
-                verifier: (DocumentationModule) -> Unit) {
+data class ModelConfig(
+    val roots: Array<ContentRoot> = arrayOf(),
+    val withJdk: Boolean = false,
+    val withKotlinRuntime: Boolean = false,
+    val format: String = "html",
+    val includeNonPublic: Boolean = true,
+    val perPackageOptions: List<DokkaConfiguration.PackageOptions> = emptyList(),
+    val analysisPlatform: Platform = Platform.DEFAULT,
+    val defaultPlatforms: List<String> = emptyList(),
+    val noStdlibLink: Boolean = true,
+    val collectInheritedExtensionsFromLibraries: Boolean = false,
+    val sourceLinks: List<DokkaConfiguration.SourceLinkDefinition> = emptyList()
+)
+
+fun verifyModel(
+    modelConfig: ModelConfig,
+    verifier: (DocumentationModule) -> Unit
+) {
     val documentation = DocumentationModule("test")
 
-    val options = DocumentationOptions(
-            "",
-            format,
-            includeNonPublic = includeNonPublic,
-            skipEmptyPackages = false,
-            includeRootPackage = true,
-            sourceLinks = listOf(),
-            perPackageOptions = perPackageOptions,
-            generateIndexPages = false,
-            noStdlibLink = true,
-            cacheRoot = "default",
-            languageVersion = null,
-            apiVersion = null
+    val passConfiguration = PassConfigurationImpl(
+        includeNonPublic = modelConfig.includeNonPublic,
+        skipEmptyPackages = false,
+        includeRootPackage = true,
+        sourceLinks = modelConfig.sourceLinks,
+        perPackageOptions = modelConfig.perPackageOptions,
+        noStdlibLink = modelConfig.noStdlibLink,
+        noJdkLink = false,
+        languageVersion = null,
+        apiVersion = null,
+        collectInheritedExtensionsFromLibraries = modelConfig.collectInheritedExtensionsFromLibraries
+    )
+    val configuration = DokkaConfigurationImpl(
+        outputDir = "",
+        format = modelConfig.format,
+        generateIndexPages = false,
+        cacheRoot = "default",
+        passesConfigurations = listOf(passConfiguration)
     )
 
-    appendDocumentation(documentation, *roots,
-            withJdk = withJdk,
-            withKotlinRuntime = withKotlinRuntime,
-            options = options)
-    documentation.prepareForGeneration(options)
+    appendDocumentation(documentation, configuration, passConfiguration, modelConfig)
+    documentation.prepareForGeneration(configuration)
 
     verifier(documentation)
 }
 
-fun appendDocumentation(documentation: DocumentationModule,
-                        vararg roots: ContentRoot,
-                        withJdk: Boolean = false,
-                        withKotlinRuntime: Boolean = false,
-                        options: DocumentationOptions,
-                        defaultPlatforms: List<String> = emptyList()) {
+fun appendDocumentation(
+    documentation: DocumentationModule,
+    dokkaConfiguration: DokkaConfiguration,
+    passConfiguration: DokkaConfiguration.PassConfiguration,
+    modelConfig: ModelConfig
+) {
     val messageCollector = object : MessageCollector {
         override fun clear() {
 
@@ -82,101 +96,167 @@ fun appendDocumentation(documentation: DocumentationModule,
         override fun hasErrors() = false
     }
 
-    val environment = AnalysisEnvironment(messageCollector)
+    val environment = AnalysisEnvironment(messageCollector, modelConfig.analysisPlatform)
     environment.apply {
-        if (withJdk || withKotlinRuntime) {
-            val stringRoot = PathManager.getResourceRoot(String::class.java, "/java/lang/String.class")
-            addClasspath(File(stringRoot))
+        if (modelConfig.withJdk || modelConfig.withKotlinRuntime) {
+            addClasspath(PathUtil.getJdkClassesRootsFromCurrentJre())
         }
-        if (withKotlinRuntime) {
-            val kotlinStrictfpRoot = PathManager.getResourceRoot(Strictfp::class.java, "/kotlin/jvm/Strictfp.class")
-            addClasspath(File(kotlinStrictfpRoot))
-        }
-        addRoots(roots.toList())
+        if (modelConfig.withKotlinRuntime) {
+            if (analysisPlatform == Platform.jvm) {
+                val kotlinStrictfpRoot = PathManager.getResourceRoot(Strictfp::class.java, "/kotlin/jvm/Strictfp.class")
+                addClasspath(File(kotlinStrictfpRoot))
+            }
+            if (analysisPlatform == Platform.js) {
+                val kotlinStdlibJsRoot = PathManager.getResourceRoot(Any::class.java, "/kotlin/jquery")
+                addClasspath(File(kotlinStdlibJsRoot))
+            }
 
-        loadLanguageVersionSettings(options.languageVersion, options.apiVersion)
+            if (analysisPlatform == Platform.common) {
+                // TODO: Feels hacky
+                val kotlinStdlibCommonRoot = ClassLoader.getSystemResource("kotlin/UInt.kotlin_metadata")
+                addClasspath(File(kotlinStdlibCommonRoot.file.replace("file:", "").replaceAfter(".jar", "")))
+            }
+        }
+        addRoots(modelConfig.roots.toList())
+
+        loadLanguageVersionSettings(passConfiguration.languageVersion, passConfiguration.apiVersion)
     }
     val defaultPlatformsProvider = object : DefaultPlatformsProvider {
-        override fun getDefaultPlatforms(descriptor: DeclarationDescriptor) = defaultPlatforms
+        override fun getDefaultPlatforms(descriptor: DeclarationDescriptor) = modelConfig.defaultPlatforms
     }
-    val injector = Guice.createInjector(
-            DokkaAnalysisModule(environment, options, defaultPlatformsProvider, documentation.nodeRefGraph, DokkaConsoleLogger))
+
+    val globalInjector = Guice.createInjector(
+        DokkaRunModule(dokkaConfiguration)
+    )
+
+    val injector = globalInjector.createChildInjector(
+        DokkaAnalysisModule(
+            environment,
+            dokkaConfiguration,
+            defaultPlatformsProvider,
+            documentation.nodeRefGraph,
+            passConfiguration,
+            DokkaConsoleLogger
+        )
+    )
+
     buildDocumentationModule(injector, documentation)
     Disposer.dispose(environment)
 }
 
-fun verifyModel(source: String,
-                withJdk: Boolean = false,
-                withKotlinRuntime: Boolean = false,
-                format: String = "html",
-                includeNonPublic: Boolean = true,
-                verifier: (DocumentationModule) -> Unit) {
-    if (!File(source).exists()) {
-        throw IllegalArgumentException("Can't find test data file $source")
+fun checkSourceExistsAndVerifyModel(
+    source: String,
+    modelConfig: ModelConfig = ModelConfig(),
+    verifier: (DocumentationModule) -> Unit
+) {
+    require(File(source).exists()) {
+        "Cannot find test data file $source"
     }
-    verifyModel(contentRootFromPath(source),
-            withJdk = withJdk,
-            withKotlinRuntime = withKotlinRuntime,
-            format = format,
-            includeNonPublic = includeNonPublic,
-            verifier = verifier)
+    verifyModel(
+        ModelConfig(
+            roots = arrayOf(contentRootFromPath(source)),
+            withJdk = modelConfig.withJdk,
+            withKotlinRuntime = modelConfig.withKotlinRuntime,
+            format = modelConfig.format,
+            includeNonPublic = modelConfig.includeNonPublic,
+            sourceLinks = modelConfig.sourceLinks,
+            analysisPlatform = modelConfig.analysisPlatform
+        ),
+
+        verifier = verifier
+    )
 }
 
-fun verifyPackageMember(source: String,
-                        withJdk: Boolean = false,
-                        withKotlinRuntime: Boolean = false,
-                        verifier: (DocumentationNode) -> Unit) {
-    verifyModel(source, withJdk = withJdk, withKotlinRuntime = withKotlinRuntime) { model ->
+fun verifyPackageMember(
+    source: String,
+    modelConfig: ModelConfig = ModelConfig(),
+    verifier: (DocumentationNode) -> Unit
+) {
+    checkSourceExistsAndVerifyModel(
+        source,
+        modelConfig = ModelConfig(
+            withJdk = modelConfig.withJdk,
+            withKotlinRuntime = modelConfig.withKotlinRuntime,
+            analysisPlatform = modelConfig.analysisPlatform
+        )
+    ) { model ->
         val pkg = model.members.single()
         verifier(pkg.members.single())
     }
 }
 
-fun verifyJavaModel(source: String,
-                    withKotlinRuntime: Boolean = false,
-                    verifier: (DocumentationModule) -> Unit) {
+fun verifyJavaModel(
+    source: String,
+    modelConfig: ModelConfig = ModelConfig(),
+    verifier: (DocumentationModule) -> Unit
+) {
     val tempDir = FileUtil.createTempDirectory("dokka", "")
     try {
         val sourceFile = File(source)
         FileUtil.copy(sourceFile, File(tempDir, sourceFile.name))
-        verifyModel(JavaSourceRoot(tempDir, null), withJdk = true, withKotlinRuntime = withKotlinRuntime, verifier = verifier)
-    }
-    finally {
+        verifyModel(
+            ModelConfig(
+                roots = arrayOf(JavaSourceRoot(tempDir, null)),
+                withJdk = true,
+                withKotlinRuntime = modelConfig.withKotlinRuntime,
+                analysisPlatform = modelConfig.analysisPlatform
+            ),
+            verifier = verifier
+        )
+    } finally {
         FileUtil.delete(tempDir)
     }
 }
 
-fun verifyJavaPackageMember(source: String,
-                            withKotlinRuntime: Boolean = false,
-                            verifier: (DocumentationNode) -> Unit) {
-    verifyJavaModel(source, withKotlinRuntime) { model ->
+fun verifyJavaPackageMember(
+    source: String,
+    modelConfig: ModelConfig = ModelConfig(),
+    verifier: (DocumentationNode) -> Unit
+) {
+    verifyJavaModel(source, modelConfig) { model ->
         val pkg = model.members.single()
         verifier(pkg.members.single())
     }
 }
 
-fun verifyOutput(roots: Array<ContentRoot>,
-                 outputExtension: String,
-                 withJdk: Boolean = false,
-                 withKotlinRuntime: Boolean = false,
-                 format: String = "html",
-                 includeNonPublic: Boolean = true,
-                 outputGenerator: (DocumentationModule, StringBuilder) -> Unit) {
-    verifyModel(
-            *roots,
-            withJdk = withJdk,
-            withKotlinRuntime = withKotlinRuntime,
-            format = format,
-            includeNonPublic = includeNonPublic
-    ) {
-        verifyModelOutput(it, outputExtension, roots.first().path, outputGenerator)
+fun verifyOutput(
+    modelConfig: ModelConfig = ModelConfig(),
+    outputExtension: String,
+    outputGenerator: (DocumentationModule, StringBuilder) -> Unit
+) {
+    verifyModel(modelConfig) {
+        verifyModelOutput(it, outputExtension, modelConfig.roots.first().path, outputGenerator)
     }
 }
 
-fun verifyModelOutput(it: DocumentationModule,
-                      outputExtension: String,
-                      sourcePath: String,
-                      outputGenerator: (DocumentationModule, StringBuilder) -> Unit) {
+fun verifyOutput(
+    path: String,
+    outputExtension: String,
+    modelConfig: ModelConfig = ModelConfig(),
+    outputGenerator: (DocumentationModule, StringBuilder) -> Unit
+) {
+    verifyOutput(
+        ModelConfig(
+            roots = arrayOf(contentRootFromPath(path)) + modelConfig.roots,
+            withJdk = modelConfig.withJdk,
+            withKotlinRuntime = modelConfig.withKotlinRuntime,
+            format = modelConfig.format,
+            includeNonPublic = modelConfig.includeNonPublic,
+            analysisPlatform = modelConfig.analysisPlatform,
+            noStdlibLink = modelConfig.noStdlibLink,
+            collectInheritedExtensionsFromLibraries = modelConfig.collectInheritedExtensionsFromLibraries
+        ),
+        outputExtension,
+        outputGenerator
+    )
+}
+
+fun verifyModelOutput(
+    it: DocumentationModule,
+    outputExtension: String,
+    sourcePath: String,
+    outputGenerator: (DocumentationModule, StringBuilder) -> Unit
+) {
     val output = StringBuilder()
     outputGenerator(it, output)
     val ext = outputExtension.removePrefix(".")
@@ -184,29 +264,13 @@ fun verifyModelOutput(it: DocumentationModule,
     assertEqualsIgnoringSeparators(expectedFile, output.toString())
 }
 
-fun verifyOutput(path: String,
-                 outputExtension: String,
-                 withJdk: Boolean = false,
-                 withKotlinRuntime: Boolean = false,
-                 format: String = "html",
-                 includeNonPublic: Boolean = true,
-                 outputGenerator: (DocumentationModule, StringBuilder) -> Unit) {
-    verifyOutput(
-            arrayOf(contentRootFromPath(path)),
-            outputExtension,
-            withJdk,
-            withKotlinRuntime,
-            format,
-            includeNonPublic,
-            outputGenerator
-    )
-}
-
-fun verifyJavaOutput(path: String,
-                     outputExtension: String,
-                     withKotlinRuntime: Boolean = false,
-                     outputGenerator: (DocumentationModule, StringBuilder) -> Unit) {
-    verifyJavaModel(path, withKotlinRuntime) { model ->
+fun verifyJavaOutput(
+    path: String,
+    outputExtension: String,
+    modelConfig: ModelConfig = ModelConfig(),
+    outputGenerator: (DocumentationModule, StringBuilder) -> Unit
+) {
+    verifyJavaModel(path, modelConfig) { model ->
         verifyModelOutput(model, outputExtension, path, outputGenerator)
     }
 }
@@ -216,7 +280,7 @@ fun assertEqualsIgnoringSeparators(expectedFile: File, output: String) {
     val expectedText = expectedFile.readText().replace("\r\n", "\n")
     val actualText = output.replace("\r\n", "\n")
 
-    if(expectedText != actualText)
+    if (expectedText != actualText)
         throw FileComparisonFailure("", expectedText, actualText, expectedFile.canonicalPath)
 }
 
@@ -257,7 +321,18 @@ fun StringBuilder.appendNode(node: ContentNode): StringBuilder {
         is ContentBlock -> {
             appendChildren(node)
         }
-        is ContentEmpty -> { /* nothing */ }
+        is NodeRenderContent -> {
+            append("render(")
+            append(node.node)
+            append(",")
+            append(node.mode)
+            append(")")
+        }
+        is ContentSymbol -> {
+            append(node.text)
+        }
+        is ContentEmpty -> { /* nothing */
+        }
         else -> throw IllegalStateException("Don't know how to format node $node")
     }
     return this
@@ -271,7 +346,7 @@ fun ContentNode.toTestString(): String {
 }
 
 val ContentRoot.path: String
-    get() = when(this) {
+    get() = when (this) {
         is KotlinSourceRoot -> path
         is JavaSourceRoot -> file.path
         else -> throw UnsupportedOperationException()

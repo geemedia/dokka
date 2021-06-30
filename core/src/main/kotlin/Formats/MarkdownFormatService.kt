@@ -161,24 +161,35 @@ open class MarkdownOutputBuilder(to: StringBuilder,
     }
 
     override fun appendParagraph(body: () -> Unit) {
-        if (inTableCell) {
-            ensureNewline()
-            body()
-        } else if (listStack.isNotEmpty()) {
-            body()
-            ensureNewline()
-        } else {
-            ensureParagraph()
-            body()
-            ensureParagraph()
+        when {
+            inTableCell -> {
+                ensureNewline()
+                body()
+            }
+            listStack.isNotEmpty() -> {
+                body()
+                ensureNewline()
+            }
+            else -> {
+                ensureParagraph()
+                body()
+                ensureParagraph()
+            }
         }
     }
 
     override fun appendHeader(level: Int, body: () -> Unit) {
-        ensureParagraph()
-        to.append("${"#".repeat(level)} ")
-        body()
-        ensureParagraph()
+        when {
+            inTableCell -> {
+                body()
+            }
+            else -> {
+                ensureParagraph()
+                to.append("${"#".repeat(level)} ")
+                body()
+                ensureParagraph()
+            }
+        }
     }
 
     override fun appendBlockCode(language: String, body: () -> Unit) {

@@ -19,6 +19,8 @@ import org.jetbrains.kotlin.load.java.descriptors.JavaCallableMemberDescriptor
 import org.jetbrains.kotlin.load.java.descriptors.JavaClassDescriptor
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.KtDeclaration
+import org.jetbrains.kotlin.psi.KtElement
+import org.jetbrains.kotlin.resolve.DescriptorToSourceUtils
 import org.jetbrains.kotlin.resolve.DescriptorUtils
 import org.jetbrains.kotlin.resolve.annotations.argumentValue
 import org.jetbrains.kotlin.resolve.constants.StringValue
@@ -28,17 +30,20 @@ import org.jetbrains.kotlin.resolve.scopes.getDescriptorsFiltered
 import org.jetbrains.kotlin.resolve.source.PsiSourceElement
 
 class DescriptorDocumentationParser
-         @Inject constructor(val options: DocumentationOptions,
+         @Inject constructor(val options: DokkaConfiguration.PassConfiguration,
                              val logger: DokkaLogger,
                              val linkResolver: DeclarationLinkResolver,
                              val resolutionFacade: DokkaResolutionFacade,
                              val refGraph: NodeReferenceGraph,
-                             val sampleService: SampleProcessingService)
+                             val sampleService: SampleProcessingService,
+                             val signatureProvider: KotlinElementSignatureProvider,
+        val externalDocumentationLinkResolver: ExternalDocumentationLinkResolver
+)
 {
-    fun parseDocumentation(descriptor: DeclarationDescriptor, inline: Boolean = false): Content =
-            parseDocumentationAndDetails(descriptor, inline).first
+    fun parseDocumentation(descriptor: DeclarationDescriptor, inline: Boolean = false, isDefaultNoArgConstructor: Boolean = false): Content =
+            parseDocumentationAndDetails(descriptor, inline, isDefaultNoArgConstructor).first
 
-    fun parseDocumentationAndDetails(descriptor: DeclarationDescriptor, inline: Boolean = false): Pair<Content, (DocumentationNode) -> Unit> {
+    fun parseDocumentationAndDetails(descriptor: DeclarationDescriptor, inline: Boolean = false, isDefaultNoArgConstructor: Boolean = false): Pair<Content, (DocumentationNode) -> Unit> {
         if (descriptor is JavaClassDescriptor || descriptor is JavaCallableMemberDescriptor) {
             return parseJavadoc(descriptor)
         }
@@ -59,14 +64,17 @@ class DescriptorDocumentationParser
                 ?.resolveToDescriptorIfAny()
                 ?: descriptor
 
-        var kdocText = kdoc.getContent()
+        var kdocText = if (isDefaultNoArgConstructor) {
+            getConstructorTagContent(descriptor) ?: kdoc.getContent()
+        } else kdoc.getContent()
+
         // workaround for code fence parsing problem in IJ markdown parser
         if (kdocText.endsWith("```") || kdocText.endsWith("~~~")) {
             kdocText += "\n"
         }
         val tree = parseMarkdown(kdocText)
         val linkMap = LinkMap.buildLinkMap(tree.node, kdocText)
-        val content = buildContent(tree, LinkResolver(linkMap, { href -> linkResolver.resolveContentLink(contextDescriptor, href) }), inline)
+        val content = buildContent(tree, LinkResolver(linkMap) { href -> linkResolver.resolveContentLink(contextDescriptor, href) }, inline)
         if (kdoc is KDocSection) {
             val tags = kdoc.getTags()
             tags.forEach {
@@ -79,13 +87,20 @@ class DescriptorDocumentationParser
                         val section = content.addSection(javadocSectionDisplayName(it.name), it.getSubjectName())
                         val sectionContent = it.getContent()
                         val markdownNode = parseMarkdown(sectionContent)
-                        buildInlineContentTo(markdownNode, section, LinkResolver(linkMap, { href -> linkResolver.resolveContentLink(contextDescriptor, href) }))
+                        buildInlineContentTo(markdownNode, section, LinkResolver(linkMap) { href -> linkResolver.resolveContentLink(contextDescriptor, href) })
                     }
                 }
             }
         }
         return content to { node -> }
     }
+
+    private fun getConstructorTagContent(descriptor: DeclarationDescriptor): String? {
+        return ((DescriptorToSourceUtils.descriptorToDeclaration(descriptor)?.navigationElement as? KtElement) as KtDeclaration).docComment?.findSectionByTag(
+            KDocKnownTag.CONSTRUCTOR
+        )?.getContent()
+    }
+
 
     private fun DeclarationDescriptor.isSuppressWarning() : Boolean {
         val suppressAnnotation = annotations.findAnnotation(FqName(Suppress::class.qualifiedName!!))
@@ -114,7 +129,7 @@ class DescriptorDocumentationParser
                         FqName.fromSegments(listOf("kotlin", "Any")), NoLookupLocation.FROM_IDE)
                 anyClassDescriptors.forEach {
                     val anyMethod = (it as ClassDescriptor).getMemberScope(listOf())
-                            .getDescriptorsFiltered(DescriptorKindFilter.FUNCTIONS, { it == descriptor.name })
+                            .getDescriptorsFiltered(DescriptorKindFilter.FUNCTIONS) { it == descriptor.name }
                             .single()
                     val kdoc = anyMethod.findKDoc()
                     if (kdoc != null) {
@@ -129,7 +144,12 @@ class DescriptorDocumentationParser
     fun parseJavadoc(descriptor: DeclarationDescriptor): Pair<Content, (DocumentationNode) -> Unit> {
         val psi = ((descriptor as? DeclarationDescriptorWithSource)?.source as? PsiSourceElement)?.psi
         if (psi is PsiDocCommentOwner) {
-            val parseResult = JavadocParser(refGraph, logger).parseDocumentation(psi as PsiNamedElement)
+            val parseResult = JavadocParser(
+                    refGraph,
+                    logger,
+                    signatureProvider,
+                    externalDocumentationLinkResolver
+            ).parseDocumentation(psi as PsiNamedElement)
             return parseResult.content to { node ->
                 parseResult.deprecatedContent?.let {
                     val deprecationNode = DocumentationNode("", it, NodeKind.Modifier)

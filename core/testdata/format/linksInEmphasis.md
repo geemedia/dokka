@@ -1,4 +1,4 @@
-[test](../index.md) / [Bar](./index.md)
+[test](../../index.md) / [Bar](./index.md)
 
 # Bar
 
@@ -14,7 +14,7 @@ An emphasised class.
 
 ### Constructors
 
-| [&lt;init&gt;](-init-.md) | `Bar()`<br>An emphasised class. |
+| [&lt;init&gt;](-init-.md) | An emphasised class.`Bar()` |
 
 ### Functions
 

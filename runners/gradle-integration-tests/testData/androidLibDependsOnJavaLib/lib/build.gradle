@@ -7,13 +7,12 @@ buildscript {
 
 
 plugins {
-    id 'org.jetbrains.dokka-android'
+    id 'org.jetbrains.dokka'
 }
 
 
 apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
-apply plugin: 'org.jetbrains.dokka-android'
 
 
 android {
@@ -27,13 +26,14 @@ android {
 
 dependencies {
     api(project(":jlib"))
+    dokkaRuntime files(dokka_fatjar)
 }
 
 dokka {
-    dokkaFatJar = new File(dokka_fatjar)
-
-    externalDocumentationLink {
-        url = new URL("https://example.com")
-        packageListUrl = file("$rootDir/package-list").toURI().toURL()
+    configuration {
+        externalDocumentationLink {
+            url = new URL("https://example.com")
+            packageListUrl = file("$rootDir/package-list").toURI().toURL()
+        }
     }
 }

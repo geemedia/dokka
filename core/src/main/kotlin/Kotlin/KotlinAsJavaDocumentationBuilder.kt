@@ -6,9 +6,11 @@ import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiNamedElement
 import org.jetbrains.dokka.Kotlin.DescriptorDocumentationParser
 import org.jetbrains.kotlin.asJava.elements.KtLightElement
+import org.jetbrains.kotlin.asJava.elements.KtLightMethod
 import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.name.FqName
+import org.jetbrains.kotlin.psi.KtClass
 import org.jetbrains.kotlin.psi.KtDeclaration
 import org.jetbrains.kotlin.psi.KtParameter
 import org.jetbrains.kotlin.psi.KtPropertyAccessor
@@ -28,7 +30,7 @@ class KotlinAsJavaDocumentationBuilder
             return
         }
 
-        val javaDocumentationBuilder = JavaPsiDocumentationBuilder(documentationBuilder.options,
+        val javaDocumentationBuilder = JavaPsiDocumentationBuilder(documentationBuilder.passConfiguration,
                 documentationBuilder.refGraph,
                 kotlinAsJavaDocumentationParser)
 
@@ -40,8 +42,7 @@ class KotlinAsJavaDocumentationBuilder
     fun PsiClass.isVisibleInDocumentation(): Boolean {
         val origin: KtDeclaration = (this as KtLightElement<*, *>).kotlinOrigin as? KtDeclaration ?: return true
 
-        return origin.hasModifier(KtTokens.INTERNAL_KEYWORD) != true &&
-                origin.hasModifier(KtTokens.PRIVATE_KEYWORD) != true
+        return !origin.hasModifier(KtTokens.INTERNAL_KEYWORD) && !origin.hasModifier(KtTokens.PRIVATE_KEYWORD)
     }
 }
 
@@ -59,8 +60,9 @@ class KotlinAsJavaDocumentationParser
                 return JavadocParseResult.Empty
             }
         }
+        val isDefaultNoArgConstructor = kotlinLightElement is KtLightMethod && origin is KtClass
         val descriptor = resolutionFacade.resolveToDescriptor(origin)
-        val content = descriptorDocumentationParser.parseDocumentation(descriptor, origin is KtParameter)
+        val content = descriptorDocumentationParser.parseDocumentation(descriptor, origin is KtParameter, isDefaultNoArgConstructor)
         return JavadocParseResult(content, null)
     }
 }

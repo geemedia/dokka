@@ -1,11 +1,9 @@
-[test](./index.md)
+[test](../index.md)
 
 ## Package &lt;root&gt;
 
-**Platform and version requirements:** Kotlin 1.1+
-
 ### Types
 
-| [Since1.1](-since1.1/index.md)<br>(Kotlin 1.1) | `class Since1.1`<br>Useful |
-| [Since1.2](-since1.2/index.md)<br>(Kotlin 1.2) | `class Since1.2`<br>Useful also |
+| [Since1.1](-since1.1/index.md) (Since: `1.1`) | Useful`class Since1.1` |
+| [Since1.2](-since1.2/index.md) (Since: `1.2`) | Useful also`class Since1.2` |
 

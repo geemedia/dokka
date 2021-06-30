@@ -2,7 +2,7 @@ buildscript {
     repositories {
         mavenCentral()
         jcenter()
-        maven { url "http://dl.bintray.com/kotlin/kotlin-eap-1.1" }
+        maven { url "https://dl.bintray.com/kotlin/kotlin-eap-1.1" }
         maven { url "https://dl.bintray.com/kotlin/kotlin-dev" }
     }
     dependencies {
@@ -21,7 +21,7 @@ repositories {
     mavenCentral()
     jcenter()
     maven {
-        url "http://dl.bintray.com/kotlin/kotlin-eap-1.1"
+        url "https://dl.bintray.com/kotlin/kotlin-eap-1.1"
     }
     maven {
         url "https://dl.bintray.com/kotlin/kotlin-dev"
@@ -29,11 +29,7 @@ repositories {
 }
 
 dependencies {
+    dokkaRuntime files(dokka_fatjar)
     compile group: 'org.jetbrains.kotlin', name: 'kotlin-runtime', version: test_kotlin_version
     compile group: 'org.jetbrains.kotlin', name: 'kotlin-reflect', version: test_kotlin_version
-}
-
-
-dokka {
-    dokkaFatJar = new File(dokka_fatjar)
 }

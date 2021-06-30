@@ -1,4 +1,4 @@
-[test](./index.md)
+[test](../index.md)
 
 ## Package &lt;root&gt;
 
@@ -7,9 +7,6 @@
 | [A](-a/index.md) | `class A` |
 | [B](-b/index.md) | `class B` |
 | [C](-c/index.md) | `class C<T>` |
-
-### Type Aliases
-
 | [D](-d.md) | `typealias D = `[`A`](-a/index.md) |
 | [E](-e.md) | `typealias E = `[`D`](-d.md) |
 | [F](-f.md) | `typealias F = (`[`A`](-a/index.md)`) -> `[`B`](-b/index.md) |
@@ -19,6 +16,6 @@
 | [J](-j.md) | `typealias J = `[`H`](-h.md)`<`[`A`](-a/index.md)`>` |
 | [K](-k.md) | `typealias K = `[`H`](-h.md)`<`[`J`](-j.md)`>` |
 | [L](-l.md) | `typealias L = (`[`K`](-k.md)`, `[`B`](-b/index.md)`) -> `[`J`](-j.md) |
-| [M](-m.md) | `typealias M = `[`A`](-a/index.md)<br>Documented |
+| [M](-m.md) | Documented`typealias M = `[`A`](-a/index.md) |
 | [N](-n.md) | `typealias ~~N~~ = `[`A`](-a/index.md) |
 

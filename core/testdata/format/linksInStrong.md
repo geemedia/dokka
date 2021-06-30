@@ -1,4 +1,4 @@
-[test](../index.md) / [Bar](./index.md)
+[test](../../index.md) / [Bar](./index.md)
 
 # Bar
 
@@ -14,7 +14,7 @@ A strong class.
 
 ### Constructors
 
-| [&lt;init&gt;](-init-.md) | `Bar()`<br>A strong class. |
+| [&lt;init&gt;](-init-.md) | A strong class.`Bar()` |
 
 ### Functions
 

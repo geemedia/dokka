@@ -4,13 +4,13 @@ sourceCompatibility = 1.8
 
 tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
     kotlinOptions {
-        languageVersion = "1.2"
-        apiVersion = languageVersion
+        languageVersion = language_version
+        apiVersion = language_version
         jvmTarget = "1.8"
     }
 }
 
 dependencies {
-    compile project(":core")
-    compile "com.github.spullara.cli-parser:cli-parser:1.1.1"
+    implementation "org.jetbrains.kotlinx:kotlinx-cli-jvm:0.1.0-dev-3"
+    implementation project(":core")
 }

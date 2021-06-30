@@ -14,12 +14,18 @@ class ServiceLookupException(message: String) : Exception(message)
 object ServiceLocator {
     fun <T : Any> lookup(clazz: Class<T>, category: String, implementationName: String): T {
         val descriptor = lookupDescriptor(category, implementationName)
-        val loadedClass = javaClass.classLoader.loadClass(descriptor.className)
-        val constructor = loadedClass.constructors
-                .filter { it.parameterTypes.isEmpty() }
-                .firstOrNull() ?: throw ServiceLookupException("Class ${descriptor.className} has no corresponding constructor")
+        return lookup(clazz, descriptor)
+    }
 
-        val implementationRawType: Any = if (constructor.parameterTypes.isEmpty()) constructor.newInstance() else constructor.newInstance(constructor)
+    fun <T : Any> lookup(
+        clazz: Class<T>,
+        descriptor: ServiceDescriptor
+    ): T {
+        val loadedClass = javaClass.classLoader.loadClass(descriptor.className)
+        val constructor = loadedClass.constructors.firstOrNull { it.parameterTypes.isEmpty() } ?: throw ServiceLookupException("Class ${descriptor.className} has no corresponding constructor")
+
+        val implementationRawType: Any =
+            if (constructor.parameterTypes.isEmpty()) constructor.newInstance() else constructor.newInstance(constructor)
 
         if (!clazz.isInstance(implementationRawType)) {
             throw ServiceLookupException("Class ${descriptor.className} is not a subtype of ${clazz.name}")
@@ -61,7 +67,7 @@ object ServiceLocator {
                 "jar" -> {
                     val file = JarFile(URL(it.file.substringBefore("!")).toFile())
                     try {
-                        val jarPath = it.file.substringAfterLast("!").removePrefix("/")
+                        val jarPath = it.file.substringAfterLast("!").removePrefix("/").removeSuffix("/")
                         file.entries()
                                 .asSequence()
                                 .filter { entry -> !entry.isDirectory && entry.path == jarPath && entry.extension == "properties" }
@@ -79,6 +85,7 @@ object ServiceLocator {
 }
 
 inline fun <reified T : Any> ServiceLocator.lookup(category: String, implementationName: String): T = lookup(T::class.java, category, implementationName)
+inline fun <reified T : Any> ServiceLocator.lookup(desc: ServiceDescriptor): T = lookup(T::class.java, desc)
 
 private val ZipEntry.fileName: String
     get() = name.substringAfterLast("/", name)

@@ -1,4 +1,4 @@
-[test](../index.md) / [Yasc](./index.md)
+[test](../../index.md) / [Yasc](./index.md)
 
 # Yasc
 
@@ -12,7 +12,7 @@
 
 ### Constructors
 
-| [&lt;init&gt;](-init-.md) | `Yasc()`<br>**YASC: [Yasc](./index.md) Yet Another Strong Class** |
+| [&lt;init&gt;](-init-.md) | **YASC: [Yasc](./index.md) Yet Another Strong Class**`Yasc()` |
 
 ### Functions
 

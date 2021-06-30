@@ -15,15 +15,16 @@ import com.intellij.openapi.util.Condition
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.UserDataHolderBase
 import com.intellij.openapi.vfs.StandardFileSystems
+import com.intellij.openapi.vfs.VfsUtilCore.getVirtualFileForJar
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileFilter
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.util.messages.MessageBus
 import org.jetbrains.jps.model.module.JpsModuleSourceRootType
+import org.jetbrains.kotlin.cli.common.config.ContentRoot
+import org.jetbrains.kotlin.cli.common.config.KotlinSourceRoot
 import org.jetbrains.kotlin.cli.jvm.config.JvmClasspathRoot
 import org.jetbrains.kotlin.cli.jvm.config.JvmContentRoot
-import org.jetbrains.kotlin.config.ContentRoot
-import org.jetbrains.kotlin.config.KotlinSourceRoot
 import org.picocontainer.PicoContainer
 import java.io.File
 
@@ -166,8 +167,7 @@ class CoreProjectFileIndex(private val project: Project, contentRoots: List<Cont
 
     private val sdk: Sdk = object : Sdk, RootProvider {
         override fun getFiles(rootType: OrderRootType): Array<out VirtualFile> = classpathRoots
-                .map { StandardFileSystems.local().findFileByPath(it.file.path) }
-                .filterNotNull()
+                .mapNotNull { StandardFileSystems.local().findFileByPath(it.file.path) }
                 .toTypedArray()
 
         override fun addRootSetChangedListener(p0: RootProvider.RootSetChangedListener) {
@@ -329,7 +329,7 @@ class CoreProjectFileIndex(private val project: Project, contentRoots: List<Cont
             throw UnsupportedOperationException()
         }
 
-        override fun <R : Any?> processOrder(p0: RootPolicy<R>?, p1: R): R {
+        override fun <R : Any?> processOrder(p0: RootPolicy<R>, p1: R): R {
             throw UnsupportedOperationException()
         }
 
@@ -404,7 +404,7 @@ class CoreProjectFileIndex(private val project: Project, contentRoots: List<Cont
             throw UnsupportedOperationException()
         }
 
-        override fun isDependsOn(p0: Module?): Boolean {
+        override fun isDependsOn(p0: Module): Boolean {
             throw UnsupportedOperationException()
         }
 
@@ -516,7 +516,7 @@ class CoreProjectRootManager(val projectFileIndex: CoreProjectFileIndex) : Proje
         throw UnsupportedOperationException()
     }
 
-    override fun getContentRootsFromAllModules(): Array<out VirtualFile>? {
+    override fun getContentRootsFromAllModules(): Array<out VirtualFile> {
         throw UnsupportedOperationException()
     }
 
@@ -524,7 +524,7 @@ class CoreProjectRootManager(val projectFileIndex: CoreProjectFileIndex) : Proje
         throw UnsupportedOperationException()
     }
 
-    override fun setProjectSdkName(p0: String?) {
+    override fun setProjectSdkName(p0: String) {
         throw UnsupportedOperationException()
     }
 
@@ -559,7 +559,7 @@ class CoreProjectRootManager(val projectFileIndex: CoreProjectFileIndex) : Proje
 fun ContentRoot.contains(file: VirtualFile) = when (this) {
     is JvmContentRoot -> {
         val path = if (file.fileSystem.protocol == StandardFileSystems.JAR_PROTOCOL)
-            StandardFileSystems.getVirtualFileForJar(file)?.path ?: file.path
+            getVirtualFileForJar(file)?.path ?: file.path
         else
             file.path
         File(path).startsWith(this.file.absoluteFile)

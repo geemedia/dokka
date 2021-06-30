@@ -4,24 +4,26 @@ import org.apache.maven.archiver.MavenArchiveConfiguration
 import org.apache.maven.archiver.MavenArchiver
 import org.apache.maven.execution.MavenSession
 import org.apache.maven.plugin.AbstractMojo
+import org.apache.maven.plugin.MojoExecutionException
 import org.apache.maven.plugins.annotations.*
 import org.apache.maven.project.MavenProject
 import org.apache.maven.project.MavenProjectHelper
 import org.codehaus.plexus.archiver.Archiver
 import org.codehaus.plexus.archiver.jar.JarArchiver
 import org.jetbrains.dokka.*
+import org.jetbrains.dokka.Utilities.defaultLinks
 import java.io.File
 import java.net.URL
 
 class SourceLinkMapItem {
-    @Parameter(name = "dir", required = true)
-    var dir: String = ""
+    @Parameter(name = "path", required = true)
+    var path: String = ""
 
     @Parameter(name = "url", required = true)
     var url: String = ""
 
-    @Parameter(name = "urlSuffix")
-    var urlSuffix: String? = null
+    @Parameter(name = "lineSuffix")
+    var lineSuffix: String? = null
 }
 
 class ExternalDocumentationLinkBuilder : DokkaConfiguration.ExternalDocumentationLink.Builder() {
@@ -30,19 +32,16 @@ class ExternalDocumentationLinkBuilder : DokkaConfiguration.ExternalDocumentatio
     override var url: URL? = null
     @Parameter(name = "packageListUrl", required = true)
     override var packageListUrl: URL? = null
-    @Parameter(name = "useDashAsParameterSeparator", required = false)
+    @Parameter(name = "useDashAsParameterSeparator", required = true)
     override var useDashAsParameterSeparator: Boolean = false
-    @Parameter(name = "useDotAsSubclassSeparator", required = false)
-    override var useDotAsSubclassSeparator: Boolean = false
+    @Parameter(name = "useDotAsNestedClassSeparator", required = true)
+    override var useDotAsNestedClassSeparator: Boolean = false
 }
 
 abstract class AbstractDokkaMojo : AbstractMojo() {
     class SourceRoot : DokkaConfiguration.SourceRoot {
         @Parameter(required = true)
         override var path: String = ""
-
-        @Parameter
-        override var platforms: List<String> = emptyList()
     }
 
     class PackageOptions : DokkaConfiguration.PackageOptions {
@@ -65,11 +64,7 @@ abstract class AbstractDokkaMojo : AbstractMojo() {
     var sourceRoots: List<SourceRoot> = emptyList()
 
     @Parameter
-    var samplesDirs: List<String> = emptyList()
-
-    @Parameter
-    @Deprecated("Use <includes> instead")
-    var includeDirs: List<String> = emptyList()
+    var samples: List<String> = emptyList()
 
     @Parameter
     var includes: List<String> = emptyList()
@@ -78,7 +73,7 @@ abstract class AbstractDokkaMojo : AbstractMojo() {
     var classpath: List<String> = emptyList()
 
     @Parameter
-    var sourceLinks: Array<SourceLinkMapItem> = emptyArray()
+    var sourceLinks: List<SourceLinkMapItem> = emptyList()
 
     @Parameter(required = true, defaultValue = "\${project.artifactId}")
     var moduleName: String = ""
@@ -90,11 +85,11 @@ abstract class AbstractDokkaMojo : AbstractMojo() {
     var jdkVersion: Int = 6
 
     @Parameter
-    var skipDeprecated = false
+    var skipDeprecated: Boolean = false
     @Parameter
-    var skipEmptyPackages = true
+    var skipEmptyPackages: Boolean = true
     @Parameter
-    var reportNotDocumented = true
+    var reportUndocumented: Boolean = true
 
     @Parameter
     var impliedPlatforms: List<String> = emptyList()
@@ -108,6 +103,9 @@ abstract class AbstractDokkaMojo : AbstractMojo() {
     @Parameter(defaultValue = "false")
     var noStdlibLink: Boolean = false
 
+    @Parameter(defaultValue = "false")
+    var noJdkLink: Boolean = false
+
     @Parameter
     var cacheRoot: String? = null
 
@@ -117,7 +115,32 @@ abstract class AbstractDokkaMojo : AbstractMojo() {
     @Parameter
     var apiVersion: String? = null
 
+    @Parameter
+    var includeRootPackage: Boolean = false
+
+    @Parameter
+    var suppressedFiles: List<String>  = emptyList()
+
+    @Parameter
+    var collectInheritedExtensionsFromLibraries: Boolean  = false
+
+    @Parameter
+    var platform: String = ""
+
+    @Parameter
+    var targets: List<String> = emptyList()
+
+    @Parameter
+    var sinceKotlin: String? = null
+
+    @Parameter
+    var includeNonPublic: Boolean = false
+
+    @Parameter
+    var generateIndexPages: Boolean = false
+
     protected abstract fun getOutDir(): String
+
     protected abstract fun getOutFormat(): String
 
     override fun execute() {
@@ -126,28 +149,57 @@ abstract class AbstractDokkaMojo : AbstractMojo() {
             return
         }
 
-        val gen = DokkaGenerator(
-                MavenDokkaLogger(log),
-                classpath,
-                sourceDirectories.map { SourceRootImpl(it) } + sourceRoots,
-                samplesDirs,
-                includeDirs + includes,
-                moduleName,
-                DocumentationOptions(getOutDir(), getOutFormat(),
-                        sourceLinks = sourceLinks.map { SourceLinkDefinitionImpl(it.dir, it.url, it.urlSuffix) },
-                        jdkVersion = jdkVersion,
-                        skipDeprecated = skipDeprecated,
-                        skipEmptyPackages = skipEmptyPackages,
-                        reportUndocumented = reportNotDocumented,
-                        impliedPlatforms = impliedPlatforms,
-                        perPackageOptions = perPackageOptions,
-                        externalDocumentationLinks = externalDocumentationLinks.map { it.build() },
-                        noStdlibLink = noStdlibLink,
-                        cacheRoot = cacheRoot,
-                        languageVersion = languageVersion,
-                        apiVersion = apiVersion
-                )
+        sourceLinks.forEach {
+            if (it.path.contains("\\")) {
+                throw MojoExecutionException("Incorrect path property, only Unix based path allowed.")
+            }
+        }
+
+        val passConfiguration = PassConfigurationImpl(
+            classpath = classpath,
+            sourceRoots = sourceDirectories.map { SourceRootImpl(it) } + sourceRoots.map { SourceRootImpl(path = it.path) },
+            samples = samples,
+            includes = includes,
+            collectInheritedExtensionsFromLibraries = collectInheritedExtensionsFromLibraries, // TODO: Should we implement this?
+            sourceLinks = sourceLinks.map { SourceLinkDefinitionImpl(it.path, it.url, it.lineSuffix) },
+            jdkVersion = jdkVersion,
+            skipDeprecated = skipDeprecated,
+            skipEmptyPackages = skipEmptyPackages,
+            reportUndocumented = reportUndocumented,
+            perPackageOptions = perPackageOptions.map {
+                PackageOptionsImpl(
+                    prefix = it.prefix,
+                    includeNonPublic = it.includeNonPublic,
+                    reportUndocumented = it.reportUndocumented,
+                    skipDeprecated = it.skipDeprecated,
+                    suppress = it.suppress
+                )},
+            externalDocumentationLinks = externalDocumentationLinks.map { it.build() as ExternalDocumentationLinkImpl },
+            noStdlibLink = noStdlibLink,
+            noJdkLink = noJdkLink,
+            languageVersion = languageVersion,
+            apiVersion = apiVersion,
+            moduleName = moduleName,
+            suppressedFiles = suppressedFiles,
+            sinceKotlin = sinceKotlin,
+            analysisPlatform = if (platform.isNotEmpty()) Platform.fromString(platform) else Platform.DEFAULT,
+            targets = targets,
+            includeNonPublic = includeNonPublic,
+            includeRootPackage = includeRootPackage
         )
+
+        passConfiguration.externalDocumentationLinks += passConfiguration.defaultLinks()
+
+        val configuration = DokkaConfigurationImpl(
+            outputDir = getOutDir(),
+            format = getOutFormat(),
+            impliedPlatforms = impliedPlatforms,
+            cacheRoot = cacheRoot,
+            passesConfigurations = listOf(passConfiguration),
+            generateIndexPages = generateIndexPages
+        )
+
+        val gen = DokkaGenerator(configuration, MavenDokkaLogger(log))
 
         gen.generate()
     }
@@ -200,7 +252,7 @@ class DokkaJavadocJarMojo : AbstractDokkaMojo() {
 
     /**
      * The archive configuration to use.
-     * See [Maven Archiver Reference](http://maven.apache.org/shared/maven-archiver/index.html)
+     * See [Maven Archiver Reference](https://maven.apache.org/shared/maven-archiver/index.html)
      */
     @Parameter
     private val archive = MavenArchiveConfiguration()
@@ -239,11 +291,11 @@ class DokkaJavadocJarMojo : AbstractDokkaMojo() {
         val javadocJar = File(jarOutputDirectory, jarFileName)
 
         val archiver = MavenArchiver()
-        archiver.setArchiver(jarArchiver)
+        archiver.archiver = jarArchiver
         archiver.setOutputFile(javadocJar)
         archiver.archiver.addDirectory(File(outputDir), arrayOf("**/**"), arrayOf())
 
-        archive.setAddMavenDescriptor(false)
+        archive.isAddMavenDescriptor = false
         archiver.createArchive(session, project, archive)
 
         return javadocJar

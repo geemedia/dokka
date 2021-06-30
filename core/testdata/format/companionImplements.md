@@ -1,4 +1,4 @@
-[test](../index.md) / [Foo](./index.md)
+[test](../../index.md) / [Foo](./index.md)
 
 # Foo
 
@@ -12,5 +12,5 @@ Correct ref [Foo.Companion](-companion.md)
 
 ### Constructors
 
-| [&lt;init&gt;](-init-.md) | `Foo()`<br>Correct ref [Foo.Companion](-companion.md) |
+| [&lt;init&gt;](-init-.md) | Correct ref [Foo.Companion](-companion.md)`Foo()` |
 

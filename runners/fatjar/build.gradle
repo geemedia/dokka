@@ -5,7 +5,6 @@ apply plugin: 'java'
 apply plugin: 'com.github.johnrengelman.shadow'
 
 dependencies {
-    compile project(":runners:cli")
     compile project(":runners:ant")
 }
 

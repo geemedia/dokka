@@ -1,4 +1,4 @@
-[test](../index.md) / [Bar](./index.md)
+[test](../../index.md) / [Bar](./index.md)
 
 # Bar
 
@@ -29,7 +29,7 @@ Usage instructions:
 
 ### Constructors
 
-| [&lt;init&gt;](-init-.md) | `Bar()`<br>Usage instructions: |
+| [&lt;init&gt;](-init-.md) | Usage instructions:`Bar()` |
 
 ### Properties
 
